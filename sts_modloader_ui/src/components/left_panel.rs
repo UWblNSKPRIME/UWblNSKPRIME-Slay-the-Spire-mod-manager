@@ -87,6 +87,58 @@ pub fn view<'a>(state: &'a AppState) -> Element<'a, Message> {
     .spacing(10)
     .align_items(Alignment::Center);
 
+    // Order modification buttons (Move Up, Move Down, Auto Sort)
+    let is_search_empty = state.search_query.trim().is_empty();
+    
+    let move_up_btn = if let Some(ref selected_id) = state.selected_mod_id {
+        if is_search_empty {
+            button(text("Move Up ▲").size(12))
+                .padding(6)
+                .on_press(Message::MoveModUp(selected_id.clone()))
+                .style(iced::theme::Button::Custom(Box::new(BorderButton)))
+        } else {
+            button(text("Move Up ▲").size(12))
+                .padding(6)
+                .style(iced::theme::Button::Custom(Box::new(BorderButton)))
+        }
+    } else {
+        button(text("Move Up ▲").size(12))
+            .padding(6)
+            .style(iced::theme::Button::Custom(Box::new(BorderButton)))
+    };
+
+    let move_down_btn = if let Some(ref selected_id) = state.selected_mod_id {
+        if is_search_empty {
+            button(text("Move Down ▼").size(12))
+                .padding(6)
+                .on_press(Message::MoveModDown(selected_id.clone()))
+                .style(iced::theme::Button::Custom(Box::new(BorderButton)))
+        } else {
+            button(text("Move Down ▼").size(12))
+                .padding(6)
+                .style(iced::theme::Button::Custom(Box::new(BorderButton)))
+        }
+    } else {
+        button(text("Move Down ▼").size(12))
+            .padding(6)
+            .style(iced::theme::Button::Custom(Box::new(BorderButton)))
+    };
+
+    let auto_sort_btn = button(text("⚡ Auto Sort").size(12))
+        .padding(6)
+        .on_press(Message::AutoSortMods)
+        .style(iced::theme::Button::Custom(Box::new(BorderButton)));
+
+    let ordering_row = row![
+        text("Order:").size(12).style(muted_color),
+        iced::widget::horizontal_space().width(Length::Fill),
+        move_up_btn,
+        move_down_btn,
+        auto_sort_btn
+    ]
+    .spacing(10)
+    .align_items(Alignment::Center);
+
     let mut list_col = column![].spacing(4);
     for m in &filtered_mods {
         let is_selected = state.selected_mod_id.as_deref() == Some(&m.id);
@@ -102,7 +154,8 @@ pub fn view<'a>(state: &'a AppState) -> Element<'a, Message> {
                 iced::widget::horizontal_space().width(Length::Fill),
                 text(format!("v{}", m.version))
                     .size(12)
-                    .style(muted_color)
+                    .style(muted_color),
+                iced::widget::horizontal_space().width(12) // indent version from the scrollbar
             ]
             .align_items(Alignment::Center),
         )
@@ -129,6 +182,7 @@ pub fn view<'a>(state: &'a AppState) -> Element<'a, Message> {
     let main_col = column![
         search_box,
         toggle_row,
+        ordering_row,
         scroll
     ]
     .spacing(10);

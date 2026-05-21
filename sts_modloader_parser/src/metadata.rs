@@ -100,6 +100,70 @@ pub fn parse_jar_metadata(jar_path: &Path, source: ModSource) -> Result<ModInfo,
     })
 }
 
+/// Sorts a vector of ModInfo topologically based on their dependencies.
+/// If Mod B depends on Mod A, Mod A will appear before Mod B in the resulting vector.
+pub fn sort_mods_topologically(mods: &mut Vec<ModInfo>) {
+    let n = mods.len();
+    if n <= 1 {
+        return;
+    }
+
+    // Build a map of Mod ID -> Index in the original list
+    let id_to_index: std::collections::HashMap<String, usize> = mods
+        .iter()
+        .enumerate()
+        .map(|(i, m)| (m.id.clone(), i))
+        .collect();
+
+    // visited states: 0 = unvisited, 1 = visiting, 2 = visited
+    let mut visited = vec![0u8; n];
+    let mut order = Vec::with_capacity(n);
+
+    fn dfs(
+        u: usize,
+        mods: &[ModInfo],
+        id_to_index: &std::collections::HashMap<String, usize>,
+        visited: &mut [u8],
+        order: &mut Vec<usize>,
+    ) {
+        visited[u] = 1; // visiting
+
+        for dep_id in &mods[u].dependencies {
+            // Slay the Spire / ModTheSpire itself is satisfied implicitly
+            if dep_id == "ModTheSpire" || dep_id == "basemod" && !id_to_index.contains_key("basemod") {
+                // If a dependency is a base mod loader component and not present, skip it
+                continue;
+            }
+
+            if let Some(&v) = id_to_index.get(dep_id) {
+                if visited[v] == 0 {
+                    dfs(v, mods, id_to_index, visited, order);
+                }
+            }
+        }
+
+        visited[u] = 2; // visited
+        order.push(u);
+    }
+
+    for i in 0..n {
+        if visited[i] == 0 {
+            dfs(i, mods, &id_to_index, &mut visited, &mut order);
+        }
+    }
+
+    // Reorder mods based on the computed topological order.
+    // 'order' contains dependencies first, then the mods that depend on them.
+    let mut temp_mods: Vec<Option<ModInfo>> = mods.drain(..).map(Some).collect();
+    let mut sorted_mods = Vec::with_capacity(n);
+    for idx in order {
+        if let Some(m) = temp_mods[idx].take() {
+            sorted_mods.push(m);
+        }
+    }
+    *mods = sorted_mods;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,5 +303,36 @@ mod tests {
         let jar_path = PathBuf::from("this_file_does_not_exist.jar");
         let res = parse_jar_metadata(&jar_path, ModSource::Local);
         assert!(matches!(res, Err(ParserError::Io(_))));
+    }
+
+    #[test]
+    fn test_sort_mods_topologically() {
+        let create_mock_mod = |id: &str, deps: Vec<&str>| ModInfo {
+            id: id.to_string(),
+            name: format!("Mod {}", id),
+            authors: vec![],
+            version: "1.0.0".to_string(),
+            description: None,
+            dependencies: deps.into_iter().map(String::from).collect(),
+            sts_version: None,
+            mts_version: None,
+            jar_path: PathBuf::from(format!("{}.jar", id)),
+            source: ModSource::Local,
+            enabled: false,
+        };
+
+        // Mod C depends on Mod B, Mod B depends on Mod A.
+        // Input: [C, B, A] -> Output: [A, B, C]
+        let mut mods = vec![
+            create_mock_mod("C", vec!["B"]),
+            create_mock_mod("B", vec!["A"]),
+            create_mock_mod("A", vec![]),
+        ];
+
+        sort_mods_topologically(&mut mods);
+
+        assert_eq!(mods[0].id, "A");
+        assert_eq!(mods[1].id, "B");
+        assert_eq!(mods[2].id, "C");
     }
 }

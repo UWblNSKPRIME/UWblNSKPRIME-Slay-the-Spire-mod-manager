@@ -48,6 +48,11 @@ pub enum Message {
     // Themes selection
     SelectTheme(String),
 
+    // Reordering and sorting
+    MoveModUp(String),
+    MoveModDown(String),
+    AutoSortMods,
+
     // Custom Export Success Modal
     CloseExportModal,
     SaveExportToFile(String),
@@ -107,6 +112,16 @@ impl AppState {
                 for m in &mut self.mods {
                     m.enabled = profile.enabled_mods.contains(&m.id);
                 }
+
+                // Reorder mods so that enabled mods appear first, in the exact sequence saved in the active profile.
+                let mut reordered = Vec::with_capacity(self.mods.len());
+                for enabled_id in &profile.enabled_mods {
+                    if let Some(pos) = self.mods.iter().position(|m| m.id == *enabled_id) {
+                        reordered.push(self.mods.remove(pos));
+                    }
+                }
+                reordered.append(&mut self.mods);
+                self.mods = reordered;
             }
         }
     }
@@ -415,6 +430,29 @@ impl Application for AppState {
             Message::SelectTheme(theme_name) => {
                 self.config.theme = Some(theme_name);
                 let _ = sts_modloader_core::save_config(&self.config);
+                Command::none()
+            }
+            Message::MoveModUp(id) => {
+                if let Some(pos) = self.mods.iter().position(|m| m.id == id) {
+                    if pos > 0 {
+                        self.mods.swap(pos, pos - 1);
+                        self.save_mods_to_active_profile();
+                    }
+                }
+                Command::none()
+            }
+            Message::MoveModDown(id) => {
+                if let Some(pos) = self.mods.iter().position(|m| m.id == id) {
+                    if pos < self.mods.len() - 1 {
+                        self.mods.swap(pos, pos + 1);
+                        self.save_mods_to_active_profile();
+                    }
+                }
+                Command::none()
+            }
+            Message::AutoSortMods => {
+                sts_modloader_parser::sort_mods_topologically(&mut self.mods);
+                self.save_mods_to_active_profile();
                 Command::none()
             }
             Message::CloseExportModal => {

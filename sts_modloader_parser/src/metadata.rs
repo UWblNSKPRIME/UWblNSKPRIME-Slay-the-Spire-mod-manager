@@ -73,7 +73,17 @@ pub fn parse_jar_metadata(jar_path: &Path, source: ModSource) -> Result<ModInfo,
         .by_name("ModTheSpire.json")
         .map_err(|_| ParserError::MetadataNotFound)?;
         
-    let raw: RawModMetadata = serde_json::from_reader(&mut meta_file)?;
+    let mut content = Vec::new();
+    std::io::Read::read_to_end(&mut meta_file, &mut content)?;
+    
+    // Strip UTF-8 BOM if present
+    let clean_content = if content.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        &content[3..]
+    } else {
+        &content[..]
+    };
+    
+    let raw: RawModMetadata = serde_json::from_slice(clean_content)?;
     
     Ok(ModInfo {
         id: raw.modid,
@@ -148,6 +158,24 @@ mod tests {
         assert_eq!(info.mts_version, Some("3.8.0".to_string()));
         assert_eq!(info.source, ModSource::Local);
         assert!(!info.enabled);
+    }
+
+    #[test]
+    fn test_parse_jar_metadata_success_utf8_bom() {
+        let json = format!("\u{FEFF}{}", r#"{
+            "modid": "bommod",
+            "name": "BOM Mod",
+            "version": "0.1.1"
+        }"#);
+
+        let jar_path = create_temp_jar(Some(&json));
+        let res = parse_jar_metadata(&jar_path, ModSource::Local);
+        let _ = fs::remove_file(&jar_path);
+
+        let info = res.expect("Should parse successfully with BOM");
+        assert_eq!(info.id, "bommod");
+        assert_eq!(info.name, "BOM Mod");
+        assert_eq!(info.version, "0.1.1");
     }
 
     #[test]

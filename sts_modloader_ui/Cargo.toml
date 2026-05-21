@@ -1,0 +1,13 @@
+[package]
+name = "sts_modloader_ui"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+sts_modloader_core = { path = "../sts_modloader_core" }
+sts_modloader_fs = { path = "../sts_modloader_fs" }
+sts_modloader_parser = { path = "../sts_modloader_parser" }
+sts_modloader_profile = { path = "../sts_modloader_profile" }
+iced = { version = "0.12", features = ["tokio", "canvas", "image"] }
+tokio = { version = "1.35", features = ["rt", "macros"] }
+rfd = "0.12"
